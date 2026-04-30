@@ -1,6 +1,4 @@
-﻿using System;
-
-class City
+﻿class City
 {
     public int Id { get; set; }
     public int CountryId { get; set; }

@@ -1,24 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Text;
 
 class ReportBuilder
 {
     private DatabaseManager _db;
-    private string _sql;
-    private string _title;
-    private string[] _headers;
-    private int[] _widths;
-    private bool _numbered;
-    private string _footer;
+    private string _sql = "";
+    private string _title = "";
+    private string[] _headers = Array.Empty<string>();
+    private int[] _widths = Array.Empty<int>();
 
     public ReportBuilder(DatabaseManager db)
     {
         _db = db;
-        _headers = new string[0];
-        _widths = new int[0];
-        _title = "";
-        _footer = "";
     }
 
     public ReportBuilder Query(string sql)
@@ -45,57 +37,39 @@ class ReportBuilder
         return this;
     }
 
-    public ReportBuilder Numbered()
+    public string Build()
     {
-        _numbered = true;
-        return this;
-    }
+        var (cols, rows) = _db.ExecuteQuery(_sql);
+        var sb = new StringBuilder();
 
-    public ReportBuilder Footer(string footer)
-    {
-        _footer = footer;
-        return this;
-    }
+        sb.AppendLine($"\n=== {_title} ===");
 
-    public void Print()
-    {
-        var data = _db.ExecuteQuery(_sql);
-
-        Console.WriteLine("\n" + _title + "\n");
-
-        string[] headers = _headers.Length > 0 ? _headers : data.cols;
+        var headers = _headers.Length > 0 ? _headers : cols;
         int n = headers.Length;
 
-        int[] widths = _widths.Length == n ? _widths : new int[n];
-        for (int i = 0; i < n; i++)
-            if (widths.Length > 0) { }
-        if (_widths.Length == 0)
-        {
-            widths = new int[n];
-            for (int i = 0; i < n; i++) widths[i] = 20;
-        }
-
-        if (_numbered)
-            Console.Write("№".PadRight(5));
+        int[] widths = _widths.Length == n ? _widths : Enumerable.Repeat(20, n).ToArray();
 
         for (int i = 0; i < n; i++)
-            Console.Write(headers[i].PadRight(widths[i]));
+            sb.Append(headers[i].PadRight(widths[i]));
+        sb.AppendLine();
 
-        Console.WriteLine();
-        Console.WriteLine(new string('-', 50));
+        sb.AppendLine(new string('─', widths.Sum()));
 
-        for (int i = 0; i < data.rows.Count; i++)
+        foreach (var row in rows)
         {
-            if (_numbered)
-                Console.Write((i + 1).ToString().PadRight(5));
-
-            for (int j = 0; j < n; j++)
-                Console.Write(data.rows[i][j].PadRight(widths[j]));
-
-            Console.WriteLine();
+            for (int i = 0; i < n; i++)
+                sb.Append(row[i].PadRight(widths[i]));
+            sb.AppendLine();
         }
 
-        if (_footer != "")
-            Console.WriteLine("\n" + _footer + ": " + data.rows.Count);
+        return sb.ToString();
+    }
+
+    public void Print() => Console.WriteLine(Build());
+
+    public void SaveToFile(string path)
+    {
+        File.WriteAllText(path, Build());
+        Console.WriteLine($"Saved to {path}");
     }
 }

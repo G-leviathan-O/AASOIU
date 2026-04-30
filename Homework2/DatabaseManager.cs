@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using Microsoft.Data.Sqlite;
+﻿using Microsoft.Data.Sqlite;
 
 class DatabaseManager
 {
@@ -12,16 +9,16 @@ class DatabaseManager
         _connectionString = $"Data Source={dbPath}";
     }
 
-    // ───── INIT ─────
+
 
     public void InitializeDatabase(string countryCsv, string cityCsv)
     {
         CreateTables();
 
-        if (GetAllCountries().Count == 0)
+        if (GetAllCountries().Count == 0 && File.Exists(countryCsv))
             ImportCountries(countryCsv);
 
-        if (GetAllCities().Count == 0)
+        if (GetAllCities().Count == 0 && File.Exists(cityCsv))
             ImportCities(cityCsv);
     }
 
@@ -50,7 +47,7 @@ class DatabaseManager
         }
     }
 
-    // ───── IMPORT CSV ─────
+
 
     private void ImportCountries(string path)
     {
@@ -58,10 +55,8 @@ class DatabaseManager
         {
             conn.Open();
 
-            foreach (var line in File.ReadAllLines(path))
+            foreach (var line in File.ReadAllLines(path).Skip(1))
             {
-                if (line.StartsWith("country_id")) continue;
-
                 var p = line.Split(';');
 
                 var cmd = conn.CreateCommand();
@@ -81,10 +76,8 @@ class DatabaseManager
         {
             conn.Open();
 
-            foreach (var line in File.ReadAllLines(path))
+            foreach (var line in File.ReadAllLines(path).Skip(1))
             {
-                if (line.StartsWith("city_id")) continue;
-
                 var p = line.Split(';');
 
                 var cmd = conn.CreateCommand();
@@ -101,7 +94,7 @@ class DatabaseManager
         }
     }
 
-    // ───── READ ─────
+
 
     public List<Country> GetAllCountries()
     {
@@ -113,7 +106,7 @@ class DatabaseManager
 
             var cmd = conn.CreateCommand();
             cmd.CommandText = "SELECT * FROM country";
-
+                
             var r = cmd.ExecuteReader();
 
             while (r.Read())
@@ -155,7 +148,22 @@ class DatabaseManager
         return list;
     }
 
-    // ───── CRUD ─────
+    public City GetCityById(int id)
+    {
+        using (var conn = new SqliteConnection(_connectionString))
+        {
+            conn.Open();
+
+            var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT * FROM city WHERE city_id=@id";
+            cmd.Parameters.AddWithValue("@id", id);
+
+            using var r = cmd.ExecuteReader();
+            if (r.Read())
+                return new City(r.GetInt32(0), r.GetInt32(1), r.GetString(2), r.GetInt32(3));
+            return null;
+        }
+    }
 
     public void AddCity(City c)
     {
@@ -177,6 +185,24 @@ class DatabaseManager
         }
     }
 
+    public void UpdateCity(City c)
+    {
+        using (var conn = new SqliteConnection(_connectionString))
+        {
+            conn.Open();
+
+            var cmd = conn.CreateCommand();
+            cmd.CommandText = @"UPDATE city
+                            SET country_id=@cid, city_name=@name, population_k=@pop
+                            WHERE city_id=@id";
+            cmd.Parameters.AddWithValue("@id", c.Id);
+            cmd.Parameters.AddWithValue("@cid", c.CountryId);
+            cmd.Parameters.AddWithValue("@name", c.Name);
+            cmd.Parameters.AddWithValue("@pop", c.PopulationK);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
     public void DeleteCity(int id)
     {
         using (var conn = new SqliteConnection(_connectionString))
@@ -191,7 +217,7 @@ class DatabaseManager
         }
     }
 
-    // ───── REPORT EXEC ─────
+
 
     public (string[] cols, List<string[]> rows) ExecuteQuery(string sql)
     {
@@ -208,17 +234,14 @@ class DatabaseManager
             var r = cmd.ExecuteReader();
 
             cols = new string[r.FieldCount];
-
             for (int i = 0; i < r.FieldCount; i++)
                 cols[i] = r.GetName(i);
 
             while (r.Read())
             {
                 string[] row = new string[r.FieldCount];
-
-                for (int i = 0; i < r.FieldCount; i++)
+                for (int i = 0; i < row.Length; i++)
                     row[i] = r.GetValue(i).ToString();
-
                 rows.Add(row);
             }
         }
